@@ -165,8 +165,25 @@ def create_tool_description(tool: ChatCompletionToolParam):
 def _get_openai_client(model_name: str):
     """
     Get from environment variables.
+    
+    Supports three modes:
+    1. LOCAL_MODEL_API_BASE: For locally hosted models (e.g., vllm)
+    2. AZURE_OPENAI: For Azure-hosted OpenAI models
+    3. Default: Regular OpenAI API
     """
 
+    # Check for locally hosted model first
+    local_api_base = os.getenv("LOCAL_MODEL_API_BASE")
+    if local_api_base:
+        # For local models (vllm, etc.), use the base URL with dummy API key
+        return openai.AsyncOpenAI(
+            api_key="EMPTY",  # Local models don't require real API key
+            base_url=local_api_base,
+            timeout=300.0,
+            max_retries=3,
+        )
+    
+    # Check for Azure OpenAI
     if os.getenv("AZURE_OPENAI", "0") == "1":
         endpoint = os.getenv(f"AZURE_OPENAI_{model_name.replace('-', '_')}_ENDPOINT")
         api_key = os.getenv(f"AZURE_OPENAI_{model_name.replace('-', '_')}_API_KEY")
@@ -185,7 +202,7 @@ def _get_openai_client(model_name: str):
             api_version=api_version,
         )
     else:
-        # Let OpenAI configure the API key.
+        # Let OpenAI configure the API key from environment
         return openai.AsyncOpenAI()
 
 
