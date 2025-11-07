@@ -173,15 +173,20 @@ def _get_openai_client(model_name: str):
     """
 
     # Check for locally hosted model first
-    local_api_base = os.getenv("LOCAL_MODEL_API_BASE")
-    if local_api_base:
-        # For local models (vllm, etc.), use the base URL with dummy API key
-        return openai.AsyncOpenAI(
-            api_key="EMPTY",  # Local models don't require real API key
-            base_url=local_api_base,
-            timeout=300.0,
-            max_retries=3,
-        )
+    # # Support multiple environment variable names for local API base
+    # local_api_base = (
+    #     os.getenv("LOCAL_MODEL_API_BASE") 
+    # )
+    # if local_api_base:
+    #     # For local models (vllm, etc.), use the base URL with dummy API key
+    #     return openai.AsyncOpenAI(
+    #         base_url=local_api_base,
+    #         api_key="not-needed",  
+    #     )
+    return openai.AsyncOpenAI(
+        base_url="http://localhost:8000/v1",
+        api_key="not-needed",  
+    )
     
     # Check for Azure OpenAI
     if os.getenv("AZURE_OPENAI", "0") == "1":
@@ -218,6 +223,17 @@ class LM:
         self.semaphore = asyncio.Semaphore(max_concurrency)
         self.client = _get_openai_client(model)
         self.default_kwargs = default_kwargs or {}
+        
+        # Check if model supports vision/images
+        # Most vision models have "vision", "gpt-4o", "gpt-4-turbo", "claude-3" in the name
+        # For local models (like Qwen/Qwen3), assume no vision unless explicitly stated
+        self.supports_vision = (
+            "vision" in model.lower() 
+            or "gpt-4o" in model.lower()
+            or "gpt-4-turbo" in model.lower()
+            or "claude-3" in model.lower()
+            or "gemini" in model.lower()
+        )
 
     def is_openai(self) -> bool:
         return isinstance(self.client, (openai.AsyncAzureOpenAI, openai.AsyncOpenAI))

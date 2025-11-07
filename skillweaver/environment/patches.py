@@ -285,9 +285,16 @@ def create_locator_error_wrapper(
 
             source = error_function["source"]
         lines = source.split("\n")
-        before = lines[:error_function_offset_line]
-        during = lines[error_function_offset_line]
-        after = lines[error_function_offset_line + 1 :]
+        # Add bounds check to prevent IndexError
+        if error_function_offset_line < 0 or error_function_offset_line >= len(lines):
+            # If line is out of bounds, use safe defaults
+            before = lines
+            during = ""
+            after = []
+        else:
+            before = lines[:error_function_offset_line]
+            during = lines[error_function_offset_line]
+            after = lines[error_function_offset_line + 1 :]
 
         locals_str_filter = ""
         for k, v in locals_.items():

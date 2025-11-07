@@ -38,6 +38,20 @@ from skillweaver.util.perfmon import monitor
 async def _generate_test_case_arguments(lm: LM, state: State, function: Function):
     args = function["args"].copy()
     args.pop("page", None)
+    # Build user content - include screenshot only if model supports vision
+    user_content = [
+        {
+            "type": "text",
+            "text": generate_practice_args(
+                function["name"],
+                function["source"],
+                state.get_axtree_string(),
+            ),
+        }
+    ]
+    if lm.supports_vision:
+        user_content.append(lm.image_url_content_piece(state.screenshot))
+    
     return await lm(
         [
             {
@@ -46,17 +60,7 @@ async def _generate_test_case_arguments(lm: LM, state: State, function: Function
             },
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": generate_practice_args(
-                            function["name"],
-                            function["source"],
-                            state.get_axtree_string(),
-                        ),
-                    },
-                    lm.image_url_content_piece(state.screenshot),
-                ],
+                "content": user_content,
             },
         ],
         json_schema=J.struct(
@@ -102,6 +106,21 @@ async def _choose_explore_task(
     procedural_knowledge = "\n".join(
         [f' - {fn["name"]}' for fn in knowledge_base.get_functions()]
     )
+    # Build user content - include screenshot only if model supports vision
+    user_content = [
+        {
+            "type": "text",
+            "text": propose_skill_templ(
+                procedural_knowledge=procedural_knowledge,
+                semantic_knowledge=knowledge_base.semantic_knowledge,
+                ax_tree=state.get_axtree_string(),
+                is_live_website=is_live_website,
+            ),
+        }
+    ]
+    if lm.supports_vision:
+        user_content.append(lm.image_url_content_piece(state.screenshot))
+    
     response = await lm(
         [
             {
@@ -110,18 +129,7 @@ async def _choose_explore_task(
             },
             {
                 "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": propose_skill_templ(
-                            procedural_knowledge=procedural_knowledge,
-                            semantic_knowledge=knowledge_base.semantic_knowledge,
-                            ax_tree=state.get_axtree_string(),
-                            is_live_website=is_live_website,
-                        ),
-                    },
-                    lm.image_url_content_piece(state.screenshot),
-                ],
+                "content": user_content,
             },
         ],
         json_schema=J.cot_schema("proposed_skill"),

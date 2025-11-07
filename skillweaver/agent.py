@@ -33,9 +33,11 @@ def annotate_source_with_recoveries(
     for recovery in recoveries:
         line = recovery["debug"]["error_function_offset_line"]
         locator = recovery["attempts"][-1]["locator_code"]
-        source_lines[
-            line
-        ] += f" # RECOVERY. Locator should be replaced with (*exact string*): {locator}"
+        # Add bounds check to prevent IndexError
+        if 0 <= line < len(source_lines):
+            source_lines[
+                line
+            ] += f" # RECOVERY. Locator should be replaced with (*exact string*): {locator}"
     return "\n".join(source_lines)
 
 
@@ -237,6 +239,11 @@ def _create_codegen_prompt(
         ), "previous_attempt_code must be set if errors are provided"
         user_text_prompt += f"\n\nA previous attempt had some errors. Your previous code:\n\n<code>\n{previous_attempt_code}\n</code>\n\nErrors:\n\n<errors>\n{errors}\n</errors>\n\nPlease update your response to fix these errors."
 
+    # Build user content - include screenshot only if model supports vision
+    user_content = [{"type": "text", "text": user_text_prompt}]
+    if lm.supports_vision:
+        user_content.append(lm.image_url_content_piece(states[-1].screenshot))
+    
     return [
         {
             "role": "system",
@@ -244,10 +251,7 @@ def _create_codegen_prompt(
         },
         {
             "role": "user",
-            "content": [
-                {"type": "text", "text": user_text_prompt},
-                lm.image_url_content_piece(states[-1].screenshot),
-            ],
+            "content": user_content,
         },
     ]
 

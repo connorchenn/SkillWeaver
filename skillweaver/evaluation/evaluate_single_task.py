@@ -36,7 +36,10 @@ from skillweaver.evaluation.webarena_evaluators_with_debug_info import (
 from skillweaver.evaluation.webarena_login import login_subprocess
 from skillweaver.knowledge_base.knowledge_base import KnowledgeBase, load_knowledge_base
 from skillweaver.lm import LM
-from skillweaver.openai_cua.attempt_task import attempt_task as attempt_task_cua
+try:
+    from skillweaver.openai_cua.attempt_task import attempt_task as attempt_task_cua
+except ImportError:
+    attempt_task_cua = None
 from skillweaver.util.perfmon import monitor
 
 dotenv.load_dotenv()
@@ -85,6 +88,11 @@ async def run_test_case_with_webrover(
 
     # Attempt the task.
     if lm.model == "computer-use-preview":
+        if attempt_task_cua is None:
+            raise ImportError(
+                "The 'skillweaver.openai_cua' module is required to use the 'computer-use-preview' model. "
+                "Please ensure the module is available."
+            )
         function_retrieval_lm = LM("gpt-4o")
         (states, actions, outcome_type, outcome_value) = await attempt_task_cua(
             browser,
@@ -399,6 +407,12 @@ def main():
         "--headed",
         action="store_true",
         help="Disables 'headless' mode for browser (default: False)",
+    )
+    parser.add_argument(
+        "--agent_type",
+        type=str,
+        default="skillweaver",
+        help="The type of agent to use. Can be one of 'skillweaver' or 'webarena'. Defaults to 'skillweaver'.",
     )
 
     args = parser.parse_args()
