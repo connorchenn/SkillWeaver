@@ -174,19 +174,19 @@ def _get_openai_client(model_name: str):
 
     # Check for locally hosted model first
     # # Support multiple environment variable names for local API base
-    # local_api_base = (
-    #     os.getenv("LOCAL_MODEL_API_BASE") 
-    # )
-    # if local_api_base:
-    #     # For local models (vllm, etc.), use the base URL with dummy API key
-    #     return openai.AsyncOpenAI(
-    #         base_url=local_api_base,
-    #         api_key="not-needed",  
-    #     )
-    return openai.AsyncOpenAI(
-        base_url="http://localhost:8000/v1",
-        api_key="not-needed",  
+    local_api_base = (
+        os.getenv("LOCAL_MODEL_API_BASE") 
     )
+    if local_api_base and 'gpt' not in model_name:
+        # For local models (vllm, etc.), use the base URL with dummy API key
+        return openai.AsyncOpenAI(
+            base_url=local_api_base,
+            api_key="not-needed",  
+        )
+    # return openai.AsyncOpenAI(
+    #     base_url="http://localhost:8000/v1",
+    #     api_key="not-needed",  
+    # )
     
     # Check for Azure OpenAI
     if os.getenv("AZURE_OPENAI", "0") == "1":
