@@ -151,7 +151,7 @@ def llm_fuzzy_match(pred: str, reference: str, question: str) -> float:
         {"role": "system", "content": "You are a helpful assistant"},
         {"role": "user", "content": message},
     ]
-    lm = LM("gpt-4o")
+    lm = LM("gpt-5-nano")
     response: str = asyncio.run(lm(messages))  # type: ignore
     response = response.lower()
     if "partially correct" in response or "incorrect" in response:
