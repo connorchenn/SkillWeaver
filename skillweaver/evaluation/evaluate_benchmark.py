@@ -221,8 +221,10 @@ def evaluate_benchmark(
         "success_steps": 0,
     }
 
-    # Run the tasks with a pool.
-    with Pool(pool_size) as pool:
+    # Run the tasks with a pool using 'spawn' to avoid fork-safety issues
+    # when called from within ProcessPoolExecutor workers
+    from multiprocessing import get_context
+    with get_context('spawn').Pool(pool_size) as pool:
         with tqdm.tqdm(total=len(single_task_cmd_args)) as pbar:
 
             for result in pool.imap_unordered(
