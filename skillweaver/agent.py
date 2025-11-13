@@ -269,7 +269,8 @@ async def codegen_generate(
 ):
     errors: str | None = None
     previous_attempt_code: str | None = None
-    for _ in range(5):
+    max_retries = 5
+    for retry_idx in range(max_retries):
         prompt = _create_codegen_prompt(
             lm,
             states,
@@ -290,6 +291,7 @@ async def codegen_generate(
                 python_code=J.string(),
                 terminate_with_result=J.string(),
             ),
+            max_tokens=8192,  # Prevent extremely long generations
         )
         response["prompt"] = prompt[1]["content"][0]["text"]
 
@@ -310,6 +312,13 @@ async def codegen_generate(
             previous_attempt_code = response["python_code"]
 
             await aprint("Errors found in code generation:\n", errors)
+            
+            # If we've exhausted all retries, force termination instead of returning broken code
+            if retry_idx == max_retries - 1:
+                await aprint(f"⚠️ Failed to generate valid code after {max_retries} attempts. Terminating step.")
+                response["python_code"] = ""
+                response["terminate_with_result"] = f"ERROR: Unable to generate valid code after {max_retries} attempts. Last errors: {errors}"
+                break
 
         elif response["terminate_with_result"] != "":
             break
