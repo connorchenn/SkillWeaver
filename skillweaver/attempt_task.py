@@ -203,6 +203,12 @@ async def attempt_task(
             assert (
                 action["terminate_with_result"] != ""
             ), "Not a terminal action, but no code was provided."
+            
+            # Check if this is a forced termination due to code generation failures
+            # If code generation failed after 5 attempts, no point continuing
+            if "ERROR:" in action["terminate_with_result"]:
+                await aprint(f"⚠️ Step {step} terminated after failing to generate valid code. Stopping task.")
+                # Will break immediately via the termination check below
 
         actions.append(action)
         with open(f"{store_dir}/{step:03d}_action.json", "w") as f:
@@ -227,9 +233,16 @@ async def attempt_task(
         if break_early:
             break
 
+        # Check termination - distinguish between success and error terminations
         if action["terminate_with_result"] != "":
-            await aprint("Received `terminate` action.")
-            break
+            if "ERROR:" in action["terminate_with_result"]:
+                # Error termination after 5 failed code generation attempts - break immediately
+                await aprint("🛑 Task failed: Unable to generate valid code. Terminating.")
+                break
+            else:
+                # Success termination - break immediately
+                await aprint("Received `terminate` action.")
+                break
 
     with open(f"{store_dir}/trajectory_pretty.txt", "w") as f:
         string = codegen_trajectory_to_string(
