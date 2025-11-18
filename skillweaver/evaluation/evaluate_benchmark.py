@@ -123,6 +123,7 @@ def evaluate_benchmark(
             help="The type of agent to use. Can be one of 'skillweaver' or 'webarena'. Defaults to 'skillweaver'.",
         ),
     ] = "skillweaver",
+    temperature: float = 0.3,
 ):
     print(
         "Running benchmark evaluation with parameters:", json.dumps(locals(), indent=2)
@@ -158,6 +159,7 @@ def evaluate_benchmark(
         "enable_unverified": allow_unverified_apis,
         "set_name": set_name,
         "agent_type": agent_type,
+        "temperature": temperature,
     }
     if os.path.exists(out_dir + "/eval_info.json"):
         with open(out_dir + "/eval_info.json", "r") as f:
@@ -207,6 +209,7 @@ def evaluate_benchmark(
                     "enable_unverified": allow_unverified_apis,
                     "set_name": set_name,
                     "agent_type": agent_type,
+                    "temperature": temperature,
                 }
             )
 
