@@ -204,8 +204,10 @@ def evaluate_single_task(
 
     # Apply Playwright patches.
     apply_patches()
-
-    lm = LM(lm_name, default_kwargs={"temperature": temperature})
+    if lm_name == 'gpt-5':
+        lm = LM(lm_name)
+    else:
+        lm = LM(lm_name, default_kwargs={"temperature": temperature})
 
     # Run asynchronous code with a separate async function.
     async def inner():

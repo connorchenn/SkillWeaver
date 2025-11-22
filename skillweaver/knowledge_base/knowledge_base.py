@@ -331,7 +331,6 @@ class KnowledgeBase:
                 prompt_msgs,
                 json_schema=J.cot_schema("python_code"),
                 key="update_knowledge_base",
-                max_tokens=8192,  # Prevent extremely long code generations
             )
             updated_code: str = response["python_code"]
             updated_code = (
@@ -455,7 +454,6 @@ class KnowledgeBase:
                 step_by_step_reasoning=J.string(),
                 relevant_function_names=J.list_of(J.struct(name=J.string())),
             ),
-            max_tokens=8192,  # Prevent extremely long function predictions
         )
         fns_string = ""
         valid_functions = []

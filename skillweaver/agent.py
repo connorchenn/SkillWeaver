@@ -291,7 +291,7 @@ async def codegen_generate(
                 python_code=J.string(),
                 terminate_with_result=J.string(),
             ),
-            max_tokens=8192,  # Prevent extremely long generations
+            #max_tokens=8192,  # Prevent extremely long generations
         )
         response["prompt"] = prompt[1]["content"][0]["text"]
 
