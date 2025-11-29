@@ -204,7 +204,7 @@ def evaluate_single_task(
 
     # Apply Playwright patches.
     apply_patches()
-    if lm_name == 'gpt-5':
+    if 'gpt-5' in lm_name:
         lm = LM(lm_name)
     else:
         lm = LM(lm_name, default_kwargs={"temperature": temperature})
