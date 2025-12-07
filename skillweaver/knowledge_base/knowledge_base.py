@@ -327,11 +327,20 @@ class KnowledgeBase:
                 },
                 *retry_messages,
             ]
-            response = await lm(
-                prompt_msgs,
-                json_schema=J.cot_schema("python_code"),
-                key="update_knowledge_base",
-            )
+            if 'gpt' in lm.model:
+                #no max tokens in evaluation
+                response = await lm(
+                    prompt_msgs,
+                    json_schema=J.cot_schema("python_code"),
+                    key="update_knowledge_base",
+                )
+            else:
+                response = await lm(
+                    prompt_msgs,
+                    json_schema=J.cot_schema("python_code"),
+                    key="update_knowledge_base",
+                    max_tokens=8192,
+                )
             updated_code: str = response["python_code"]
             updated_code = (
                 updated_code.replace("```python3", "")
@@ -441,20 +450,38 @@ class KnowledgeBase:
         if len(skills) == 0:
             return [], "", "<no skills available>"
 
-        response = await lm(
-            [
-                {
-                    "role": "user",
-                    "content": predict_relevant_functions_templ(
-                        function_space=skills, task=task
-                    ),
-                }
-            ],
-            json_schema=J.struct(
-                step_by_step_reasoning=J.string(),
-                relevant_function_names=J.list_of(J.struct(name=J.string())),
-            ),
-        )
+        if 'gpt' in lm.model:
+            #no max tokens in evaluation
+            response = await lm(
+                [
+                    {
+                        "role": "user",
+                        "content": predict_relevant_functions_templ(
+                            function_space=skills, task=task
+                        ),
+                    }
+                ],
+                json_schema=J.struct(
+                    step_by_step_reasoning=J.string(),
+                    relevant_function_names=J.list_of(J.struct(name=J.string())),
+                ),
+            )
+        else:
+            response = await lm(
+                [
+                    {
+                        "role": "user",
+                        "content": predict_relevant_functions_templ(
+                            function_space=skills, task=task
+                        ),
+                    }
+                ],
+                json_schema=J.struct(
+                    step_by_step_reasoning=J.string(),
+                    relevant_function_names=J.list_of(J.struct(name=J.string())),
+                ),
+                max_tokens=8192,
+            )
         fns_string = ""
         valid_functions = []
         for function_name_struct in response["relevant_function_names"]:

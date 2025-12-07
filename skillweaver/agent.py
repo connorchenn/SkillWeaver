@@ -283,16 +283,27 @@ async def codegen_generate(
             errors,
             previous_attempt_code,
         )
-
-        response = await lm(
-            prompt,
-            json_schema=J.struct(
-                step_by_step_reasoning=J.string(),
-                python_code=J.string(),
-                terminate_with_result=J.string(),
-            ),
-            #max_tokens=8192,  # Prevent extremely long generations
-        )
+        if 'gpt' in lm.model:
+            #no max tokens in evaluation
+            response = await lm(
+                prompt,
+                json_schema=J.struct(
+                    step_by_step_reasoning=J.string(),
+                    python_code=J.string(),
+                    terminate_with_result=J.string(),
+                ),
+            )
+        else:
+            response = await lm(
+                prompt,
+                json_schema=J.struct(
+                    step_by_step_reasoning=J.string(),
+                    python_code=J.string(),
+                    terminate_with_result=J.string(),
+                ),
+                max_tokens=8192,
+            )
+        
         response["prompt"] = prompt[1]["content"][0]["text"]
 
         if response["python_code"]:

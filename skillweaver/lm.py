@@ -132,6 +132,105 @@ async def completion_openai(
                 raise
 
 
+async def completion_anthropic(
+    client: anthropic.AsyncAnthropic,
+    model: str,
+    messages: list[ChatCompletionMessageParam],
+    json_mode=False,
+    json_schema=None,
+    tools: list[Function] = [],
+    args: dict = NoArgs,  # type: ignore
+    key="general",
+) -> Any:
+    if args is NoArgs:
+        args = {}
+    else:
+        args = {**args}
+
+    tries = 5
+    backoff = 4
+    for i in range(tries):
+        try:
+            start_time = time.time()
+
+            # Convert OpenAI-style messages to Anthropic format
+            system_message = None
+            anthropic_messages = []
+            
+            for msg in messages:
+                if msg["role"] == "system":
+                    system_message = msg["content"]
+                else:
+                    anthropic_messages.append({
+                        "role": msg["role"],
+                        "content": msg["content"],
+                    })
+
+            # Handle structured output for Anthropic
+            # Anthropic requires max_tokens - set default if not provided
+            max_tokens = 32768
+            
+            call_args = {
+                "model": model,
+                "messages": anthropic_messages,
+                "max_tokens": max_tokens,
+                "timeout": 600.0,  # 10 minutes timeout for long requests
+                **{k: v for k, v in args.items() if k != "max_tokens"},
+            }
+            
+            if system_message:
+                call_args["system"] = system_message
+
+            # Add structured output support via prompt engineering for JSON
+            if json_schema is not None:
+                schema_def = json_schema["schema"]
+                # Add JSON schema instruction to system message
+                json_instruction = f"\n\nYou must respond with valid JSON matching this schema:\n{json.dumps(schema_def, indent=2)}\n\nRespond ONLY with the JSON object, no other text."
+                if system_message:
+                    call_args["system"] = system_message + json_instruction
+                else:
+                    call_args["system"] = json_instruction.strip()
+
+            response = await client.messages.create(**call_args)
+
+            end_time = time.time()
+            monitor.log_timing_event("lm/" + key, start_time, end_time)
+            
+            # Extract token usage
+            input_tokens = response.usage.input_tokens
+            output_tokens = response.usage.output_tokens
+            monitor.log_token_usage(key, "anthropic:" + model, input_tokens, output_tokens)
+
+            # Extract content
+            content = response.content[0].text
+
+            # Parse JSON if needed
+            if json_mode or json_schema is not None:
+                # Try to extract JSON from markdown code blocks if present
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                elif "```" in content:
+                    content = content.split("```")[1].split("```")[0].strip()
+                
+                return json.loads(content)
+            else:
+                return content
+                
+        except Exception as e:
+            if "JSON" in str(type(e)).upper() or isinstance(e, json.JSONDecodeError):
+                await aioconsole.aprint("JSON error:")
+                await aioconsole.aprint("Content:", content if 'content' in locals() else "N/A")
+                await aioconsole.aprint(e)
+
+            if i < tries - 1:
+                await aioconsole.aprint(f"Error: {e}. Retrying...")
+                await asyncio.sleep(backoff)
+                backoff = min(30, backoff * 2)
+            else:
+                await aioconsole.aprint("Reached maximum number of tries. Raising.")
+                raise
+
+
 def create_tool_description(tool: ChatCompletionToolParam):
     name = tool["function"]["name"]
     args_str = ", ".join(
@@ -162,31 +261,34 @@ def create_tool_description(tool: ChatCompletionToolParam):
     return string
 
 
-def _get_openai_client(model_name: str):
+def _get_client(model_name: str):
     """
-    Get from environment variables.
+    Get the appropriate client based on model name and environment variables.
     
-    Supports three modes:
-    1. LOCAL_MODEL_API_BASE: For locally hosted models (e.g., vllm)
-    2. AZURE_OPENAI: For Azure-hosted OpenAI models
-    3. Default: Regular OpenAI API
+    Supports four modes:
+    1. Anthropic models (claude-*)
+    2. LOCAL_MODEL_API_BASE: For locally hosted models (e.g., vllm)
+    3. AZURE_OPENAI: For Azure-hosted OpenAI models
+    4. Default: Regular OpenAI API
     """
+    
+    # Check if it's an Anthropic model
+    if model_name.lower().startswith("claude"):
+        api_key = os.getenv("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise ValueError(
+                "ANTHROPIC_API_KEY environment variable must be set for Claude models"
+            )
+        return anthropic.AsyncAnthropic(api_key=api_key)
 
     # Check for locally hosted model first
-    # # Support multiple environment variable names for local API base
-    local_api_base = (
-        os.getenv("LOCAL_MODEL_API_BASE") 
-    )
+    local_api_base = os.getenv("LOCAL_MODEL_API_BASE")
     if local_api_base and 'gpt' not in model_name:
         # For local models (vllm, etc.), use the base URL with dummy API key
         return openai.AsyncOpenAI(
             base_url=local_api_base,
             api_key="not-needed",  
         )
-    # return openai.AsyncOpenAI(
-    #     base_url="http://localhost:8000/v1",
-    #     api_key="not-needed",  
-    # )
     
     # Check for Azure OpenAI
     if os.getenv("AZURE_OPENAI", "0") == "1":
@@ -221,17 +323,17 @@ class LM:
         self.model = model
         self.max_concurrency = max_concurrency
         self.semaphore = asyncio.Semaphore(max_concurrency)
-        self.client = _get_openai_client(model)
+        self.client = _get_client(model)
         self.default_kwargs = default_kwargs or {}
         
         # Check if model supports vision/images
-        # Most vision models have "vision", "gpt-4o", "gpt-4-turbo", "claude-3" in the name
-        # For local models (like Qwen/Qwen3), assume no vision unless explicitly stated
+        # Most vision models have "vision", "gpt-4o", "gpt-4-turbo", "claude-3", "claude-sonnet-4" in the name
         self.supports_vision = (
             "vision" in model.lower() 
             or "gpt-4o" in model.lower()
             or "gpt-4-turbo" in model.lower()
             or "claude-3" in model.lower()
+            or "claude-sonnet-4" in model.lower()
             or "gemini" in model.lower()
         )
 
@@ -272,6 +374,11 @@ class LM:
     ) -> Any:
         async with self.semaphore:
             if self.is_openai():
+                # Remove max_tokens for GPT models
+                combined_args = {**self.default_kwargs, **kwargs}
+                if "gpt" in self.model.lower():
+                    combined_args.pop("max_tokens", None)
+                
                 client_oai: openai.AsyncOpenAI | openai.AsyncAzureOpenAI = self.client  # type: ignore
                 return await completion_openai(
                     client_oai,
@@ -280,9 +387,24 @@ class LM:
                     json_mode,
                     json_schema,
                     tools,
-                    args={**self.default_kwargs, **kwargs},
+                    args=combined_args,
                     key=key,
                 )
+            elif self.is_anthropic():
+                combined_args = {**self.default_kwargs, **kwargs}
+                client_anthropic: anthropic.AsyncAnthropic = self.client  # type: ignore
+                return await completion_anthropic(
+                    client_anthropic,
+                    self.model,
+                    messages,
+                    json_mode,
+                    json_schema,
+                    tools,
+                    args=combined_args,
+                    key=key,
+                )
+            else:
+                raise ValueError(f"Unknown client type for model: {self.model}")
 
     async def json(
         self,

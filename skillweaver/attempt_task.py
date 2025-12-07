@@ -32,8 +32,10 @@ def _is_function_called_in_act_function(code: str, function_name: str):
 
 
 def fix_code_formatting(generated_code: str) -> str:
-    # Convert literal "\n" sequences to actual newlines.
-    code = generated_code.replace("\\n", "\n")
+    # Note: Modern LLMs with structured outputs (like GPT-5) already generate
+    # properly formatted code with correct escape sequences after JSON decoding.
+    # The old "replace('\\n', '\n')" conversion was breaking string literals.
+    code = generated_code
 
     # Remove trailing semicolons from each line.
     lines = code.splitlines()

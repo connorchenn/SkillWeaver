@@ -403,7 +403,7 @@ Locator: {locator_code}
                     choice=J.string(),
                     locator_code=J.string(),
                 ),
-                #max_tokens=8192,  # Prevent extremely long recovery generations
+                max_tokens=8192,  # Prevent extremely long recovery generations
             )
 
             # Backtest the intended locator.
